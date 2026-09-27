@@ -1,0 +1,28 @@
+@'
+services:
+  - type: web
+    name: newsreel
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATA_DIR
+        value: /app/data
+      - key: BASE_URL
+        sync: false
+      - key: ADMIN_USER
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: GOOGLE_CLIENT_SECRETS_FILE
+        value: /app/data/client_secret.json
+      - key: MANUS_BASE_URL
+        value: https://api.manus.ai
+'@ | Out-File -FilePath render.yaml -Encoding utf8 -NoNewline

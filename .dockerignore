@@ -1,0 +1,13 @@
+@'
+.env
+.env.*
+!.env.example
+data/
+*.db
+__pycache__/
+*.pyc
+.git/
+.gitignore
+*.md
+client_secret.json
+'@ | Out-File -FilePath .dockerignore -Encoding utf8 -NoNewline
