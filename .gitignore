@@ -1,0 +1,22 @@
+# Secrets - never commit these
+.env
+.env.*
+!.env.example
+client_secret.json
+
+# Local runtime data
+data/
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/

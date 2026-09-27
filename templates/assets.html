@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Default branding - Newsreel{% endblock %}
+{% block content %}
+<div class="head"><div class="grow">
+  <h1>Default branding</h1>
+  <p class="lede">These are used for every client that has not uploaded its own footer or outro.</p>
+</div></div>
+<div class="assets">
+  {% for kind in ('footer','outro') %}
+    {% with asset=defaults[kind], fallback=None, client_id='' %}{% include "_asset_card.html" %}{% endwith %}
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Newsreel{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="top"><div class="in">
+  <a class="brand" href="{{ url_for('dashboard') }}">Newsreel</a>
+  <nav>
+    <a href="{{ url_for('dashboard') }}">Clients</a>
+    <a href="{{ url_for('assets_page') }}">Default branding</a>
+    <a href="{{ url_for('client_new') }}">Add client</a>
+  </nav>
+</div></header>
+<main>
+  {% for cat, msg in get_flashed_messages(with_categories=true) %}
+    <div class="flash {{ cat }}" role="status">{{ msg }}</div>
+  {% endfor %}
+  {% if not auth_on %}<div class="flash err">ADMIN_PASSWORD is not set. Anyone who can reach this page can use your clients' API keys and YouTube channels.</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

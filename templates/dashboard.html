@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="head">
+  <div class="grow">
+    <h1>Clients</h1>
+    <p class="lede">Every enabled client is planned and uploaded automatically, every day, for as long as this app keeps running.
+      {% if not ticker_alive %}<strong>The background scheduler is not running.</strong>{% endif %}</p>
+  </div>
+  <a class="btn accent" href="{{ url_for('client_new') }}">Add client</a>
+</div>
+
+<div class="panel scroll">
+{% if clients %}
+<table>
+  <thead><tr><th>Client</th><th>Format</th><th>Today's videos</th><th>Manus</th><th>YouTube</th><th></th></tr></thead>
+  <tbody>
+  {% for c in clients %}
+    {% set plan = plans.get(c.id, []) %}
+    <tr>
+      <td><a href="{{ url_for('client_detail', client_id=c.id) }}"><strong>{{ c.name }}</strong></a>
+          {% if not c.enabled %}<br><span class="pill">paused</span>{% endif %}</td>
+      <td>{{ c.duration }}s, {{ c.aspect }}</td>
+      <td class="small">
+        {% for r in plan %}<span class="pill {{ r.status }}" title="video {{ r.slot }}">{{ r.publish_at|localtime(c.timezone) if r.publish_at else '' }}</span>{% if not loop.last %} {% endif %}{% endfor %}
+        {% if not plan %}<span class="muted">not planned yet</span>{% endif %}
+      </td>
+      <td>{% if c.manus_api_key_enc %}<span class="pill ok">key saved</span>{% else %}<span class="pill bad">no key</span>{% endif %}</td>
+      <td>
+        {% if c.yt_status == 'reauth' %}<span class="pill bad">reconnect needed</span>
+        {% elif c.yt_channel_title %}<span class="pill ok">{{ c.yt_channel_title }}</span>
+        {% else %}<span class="pill bad">not connected</span>{% endif %}
+      </td>
+      <td style="text-align:right">
+        <form class="inline" method="post" action="{{ url_for('client_run', client_id=c.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn ghost" type="submit" {% if busy.is_busy(c.id) %}disabled{% endif %}>{{ 'Running...' if busy.is_busy(c.id) else 'Run extra now' }}</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <div class="empty">No clients yet. <a href="{{ url_for('client_new') }}">Add your first client</a> to get started.</div>
+{% endif %}
+</div>
+
+{% if runs %}
+<div class="panel scroll">
+  <header><h2>Recent runs</h2></header>
+  <table>
+    <thead><tr><th>Run</th><th>Client</th><th>Status</th><th>Step</th><th>Started</th><th>Result</th><th></th></tr></thead>
+    <tbody>
+    {% for r in runs %}
+      <tr>
+        <td><a href="{{ url_for('run_detail', run_id=r.id) }}">#{{ r.id }}{% if r.slot %} (video {{ r.slot }}){% endif %}</a></td>
+        <td>{{ r.client_name }}</td>
+        <td><span class="pill {{ r.status }}">{{ r.status }}</span></td>
+        <td class="small">{{ r.step }}</td>
+        <td class="small">{{ r.started_at|when }}</td>
+        <td class="small">{% if r.youtube_id %}<a href="https://youtu.be/{{ r.youtube_id }}" target="_blank" rel="noopener">Watch on YouTube</a>{% elif r.error %}<span class="muted">{{ r.error[:70] }}</span>{% endif %}</td>
+        <td style="text-align:right">
+          {% if r.status not in ('running', 'publishing') %}
+          <form class="inline" method="post" action="{{ url_for('run_delete', run_id=r.id) }}" onsubmit="return confirm('Delete run #{{ r.id }}?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn danger xs" type="submit">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

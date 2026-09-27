@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Run #{{ run.id }} - Newsreel{% endblock %}
+{% block head %}{% if active %}<meta http-equiv="refresh" content="6">{% endif %}{% endblock %}
+{% block content %}
+{% set names = ['Fetching news','Writing script and SEO metadata with Groq','Generating video and thumbnail with Manus','Downloading files','Adding footer and outro'] %}
+{% set labels = ['News','Script and SEO','Video and thumbnail from Manus','Download','Footer and outro','YouTube upload'] %}
+{% set cur = names.index(run.step) if run.step in names else -1 %}
+<div class="head">
+  <div class="grow">
+    <h1>Run #{{ run.id }} <span class="pill {{ run.status }}">{{ run.status }}</span></h1>
+    <p class="lede"><a href="{{ url_for('client_detail', client_id=run.client_id) }}">{{ run.client_name }}</a>
+      {% if run.slot %}, video {{ run.slot }} of the day, scheduled {{ run.publish_at|localtime(run.client_tz) }} {{ run.client_tz }}{% else %}, extra manual run{% endif %}.
+      Started {{ run.started_at|when }}.
+      {% if run.attempts %} Generation attempt {{ run.attempts + 1 }}.{% endif %}
+      {% if run.pub_attempts %} Upload attempt {{ run.pub_attempts + 1 }}.{% endif %}
+      {% if active %} This page refreshes on its own.{% endif %}</p>
+  </div>
+  <div class="actions">
+  {% if run.final_path and run.status in ('ready','failed') and not run.youtube_id %}
+  <form class="inline" method="post" action="{{ url_for('run_publish', run_id=run.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn accent" type="submit">{{ 'Approve and upload now' if run.status == 'ready' else 'Retry upload' }}</button>
+  </form>
+  {% endif %}
+  {% if run.status not in ('running', 'publishing') %}
+  <form class="inline" method="post" action="{{ url_for('run_delete', run_id=run.id) }}" onsubmit="return confirm('Delete run #{{ run.id }}? This removes its video file and history.')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn danger" type="submit">Delete run</button>
+  </form>
+  {% endif %}
+  </div>
+</div>
+
+<ol class="rundown">
+  {% for n in names %}
+    {% set i = loop.index0 %}
+    {% if run.status in ('ready','publishing','done') or (cur > i) %}{% set cls = 'done' %}
+    {% elif cur == i and run.status == 'failed' %}{% set cls = 'bad' %}
+    {% elif cur == i %}{% set cls = 'now' %}{% else %}{% set cls = '' %}{% endif %}
+    <li class="{{ cls }}"><b>{{ labels[i] }}</b>{{ 'Done' if cls == 'done' else ('Failed' if cls == 'bad' else ('In progress' if cls == 'now' else 'Waiting')) }}</li>
+  {% endfor %}
+  {% set ucls = 'done' if run.status == 'done' else ('bad' if run.status == 'failed' and run.youtube_id is none and run.final_path else ('now' if run.status == 'publishing' else '')) %}
+  <li class="{{ ucls }}"><b>{{ labels[5] }}</b>{{ 'Done' if ucls == 'done' else ('Failed' if ucls == 'bad' else ('In progress' if ucls == 'now' else 'Waiting')) }}</li>
+</ol>
+
+{% if run.status == 'skipped' %}<div class="flash">This video was skipped: {{ run.error }}</div>
+{% elif run.error %}<div class="flash err"><strong>{{ 'Last error' if run.status in ('queued','ready') else 'Stopped' }}:</strong> {{ run.error }}</div>{% endif %}
+
+{% if has_video or run.youtube_id or has_thumb %}
+<div class="panel">
+  <header><h2>Result</h2></header>
+  <div class="videos">
+    {% if has_video %}<video class="final" src="{{ url_for('run_video', run_id=run.id) }}" controls preload="metadata"></video>{% endif %}
+    <div>
+      {% if has_thumb %}<p class="small muted" style="margin-bottom:.3rem">Thumbnail ({{ run.thumb_status or 'manus' }})</p>
+        <img src="{{ url_for('run_thumbnail', run_id=run.id) }}" alt="Thumbnail" style="max-width:280px;border-radius:6px;border:1px solid var(--line)"><br><br>{% endif %}
+      <dl class="kv">
+        {% if script %}<dt>Title</dt><dd>{{ script.title }}</dd>{% endif %}
+        {% if run.youtube_id %}<dt>YouTube</dt><dd><a href="https://youtu.be/{{ run.youtube_id }}" target="_blank" rel="noopener">youtu.be/{{ run.youtube_id }}</a></dd>{% endif %}
+        {% if run.manus_task_url %}<dt>Manus task</dt><dd><a href="{{ run.manus_task_url }}" target="_blank" rel="noopener">Open in Manus</a></dd>{% endif %}
+      </dl>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if script %}
+<div class="panel">
+  <header><h2>Script and SEO</h2><p>{{ script.voiceover_words }} words</p></header>
+  <p>{{ script.voiceover }}</p>
+  <dl class="kv">
+    <dt>Description</dt><dd>{{ script.description }}</dd>
+    <dt>Tags</dt><dd>{{ script.tags|join(', ') }}</dd>
+    <dt>Hashtags</dt><dd>{{ script.hashtags|join(' ') }}</dd>
+    <dt>Thumbnail text</dt><dd>{{ script.thumbnail_text }}</dd>
+  </dl>
+  <details style="margin-top:.6rem"><summary>Prompt sent to Manus</summary><pre class="log">{{ script.manus_prompt }}</pre></details>
+</div>
+{% endif %}
+
+<div class="panel">
+  <header><h2>Log</h2></header>
+  <pre class="log">{{ run.log or 'Waiting to start...' }}</pre>
+</div>
+{% endblock %}

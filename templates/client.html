@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}{{ client.name or 'New client' }} - Newsreel{% endblock %}
+{% block content %}
+<div class="head">
+  <div class="grow">
+    <h1>{{ 'Add client' if is_new else client.name }}</h1>
+    {% if not is_new %}<p class="lede">{{ client.videos_per_day }} video{{ 's' if client.videos_per_day != 1 }}/day, {{ client.duration }}s {{ client.aspect }}, about {{ client.news_query }} ({{ client.country }}).</p>{% endif %}
+  </div>
+  {% if not is_new %}
+  <form method="post" action="{{ url_for('client_run', client_id=client.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn accent" type="submit">Run an extra video now</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if not is_new %}
+<div class="panel">
+  <header><h2>Today's plan</h2><p>{{ client.timezone }}</p></header>
+  {% if plan %}
+  <ol class="rundown">
+    {% for r in plan %}
+      {% set cls = 'done' if r.status in ('done',) else ('bad' if r.status in ('failed','skipped') else ('now' if r.status in ('running','publishing','ready') else '')) %}
+      <li class="{{ cls }}"><b>Video {{ r.slot }}, {{ r.publish_at|localtime(client.timezone) }}</b>
+        <a href="{{ url_for('run_detail', run_id=r.id) }}"><span class="pill {{ r.status }}">{{ r.status }}</span></a>
+      </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">Planned automatically as soon as this app is running (checks every {{ config_tick if config_tick else 30 }} seconds). Times: {% for s, t in slots %}{{ t }}{% if not loop.last %}, {% endif %}{% endfor %} {{ client.timezone }}.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('client_new') if is_new else url_for('client_update', client_id=client.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+<div class="panel">
+  <header><h2>Client</h2><p>Who this channel is for.</p></header>
+  <div class="grid">
+    <div class="field"><label for="name">Client name</label>
+      <input id="name" type="text" name="name" value="{{ client.name }}" required></div>
+    <div class="field"><label for="style_notes">Style notes for the script</label>
+      <textarea id="style_notes" name="style_notes" placeholder="Example: Calm, neutral anchor voice. Mention the channel name once at the start.">{{ client.style_notes }}</textarea></div>
+  </div>
+  <div class="check" style="margin-top:.75rem"><input id="enabled" type="checkbox" name="enabled" {% if client.enabled %}checked{% endif %}>
+    <label for="enabled">Active. While off, no videos are planned, generated or uploaded for this client.</label></div>
+</div>
+
+<div class="panel">
+  <header><h2>News</h2><p>Fetched fresh before every video, skipping stories already used.</p></header>
+  <div class="grid">
+    <div class="field"><label for="news_query">Search topic</label>
+      <input id="news_query" type="text" name="news_query" value="{{ client.news_query }}">
+      <span class="hint">Example: politics, "Lok Sabha", "US Senate".</span></div>
+    <div class="field"><label for="country">Country code</label>
+      <input id="country" type="text" name="country" value="{{ client.country }}" maxlength="2">
+      <span class="hint">Two letters, for example IN, US, GB.</span></div>
+    <div class="field"><label for="language">News language code</label>
+      <input id="language" type="text" name="language" value="{{ client.language }}" maxlength="5">
+      <span class="hint">For example en, hi.</span></div>
+    <div class="field"><label for="headlines_count">Headlines given to the script writer</label>
+      <input id="headlines_count" type="number" name="headlines_count" min="3" max="15" value="{{ client.headlines_count }}"></div>
+  </div>
+  <div class="field" style="margin-top:.75rem"><label for="extra_feeds">Extra RSS feeds (optional, one per line)</label>
+    <textarea id="extra_feeds" name="extra_feeds">{{ client.extra_feeds }}</textarea></div>
+</div>
+
+<div class="panel">
+  <header><h2>Video</h2><p>Sent to Groq to write the script and to Manus to make the video and thumbnail.</p></header>
+  <div class="grid">
+    <div class="field"><span class="lab">Length</span>
+      {% set is_preset = client.duration in (10, 20, 30) %}
+      <div class="seg">
+        {% for d in (10,20,30) %}<label><input type="radio" name="duration_choice" value="{{ d }}" {% if client.duration == d %}checked{% endif %}><span>{{ d }}s</span></label>{% endfor %}
+        <label><input type="radio" name="duration_choice" value="custom" {% if not is_preset %}checked{% endif %}><span>Custom</span></label>
+      </div>
+      <input type="number" name="duration_custom" min="{{ config_min if config_min else 5 }}" max="180" placeholder="Seconds"
+             value="{{ client.duration if not is_preset else '' }}" style="margin-top:.4rem;max-width:9rem">
+      <span class="hint">Custom accepts 5-180 seconds.</span></div>
+    <div class="field"><span class="lab">Aspect ratio</span>
+      <div class="seg">
+        <label><input type="radio" name="aspect" value="9:16" {% if client.aspect == '9:16' %}checked{% endif %}><span>9:16 vertical</span></label>
+        <label><input type="radio" name="aspect" value="16:9" {% if client.aspect == '16:9' %}checked{% endif %}><span>16:9 horizontal</span></label>
+      </div></div>
+    <div class="field"><label for="script_language">Spoken language</label>
+      <input id="script_language" type="text" name="script_language" value="{{ client.script_language }}">
+      <span class="hint">Example: English, Hindi.</span></div>
+  </div>
+</div>
+
+<div class="panel">
+  <header><h2>Manus</h2><p>Videos and thumbnails for this client are generated only with this key.</p></header>
+  <div class="grid">
+    <div class="field"><label for="manus_api_key">Manus API key</label>
+      <input id="manus_api_key" type="password" name="manus_api_key" autocomplete="off"
+             placeholder="{{ 'Saved. Enter a new key to replace it.' if client.manus_api_key_enc else 'Paste the key from Manus settings' }}">
+      <span class="hint">In Manus: Settings, then API Integration, then Create API Key. Stored encrypted.</span></div>
+    <div class="field"><label for="manus_profile">Agent profile</label>
+      <select id="manus_profile" name="manus_profile">
+        {% for p in ('standard','lite','max') %}<option value="{{ p }}" {% if client.manus_profile == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select><span class="hint">Higher profiles use more Manus credits per video.</span></div>
+  </div>
+</div>
+
+<div class="panel">
+  <header><h2>Daily schedule</h2><p>How many videos a day, and the exact time each one is uploaded.</p></header>
+  <div class="grid">
+    <div class="field"><span class="lab">Videos per day</span>
+      <div class="seg">
+        {% for n in (1,2,3,4) %}<label><input type="radio" name="videos_per_day" value="{{ n }}" {% if client.videos_per_day == n %}checked{% endif %} onchange="document.getElementById('slot_times').placeholder=({{ default_slots|tojson }})[this.value]"><span>{{ n }}</span></label>{% endfor %}
+      </div></div>
+    <div class="field"><label for="slot_times">Upload times</label>
+      <input id="slot_times" type="text" name="slot_times" value="{{ client.slot_times }}" placeholder="09:00,13:00,18:00,21:00">
+      <span class="hint">One 24-hour HH:MM time per video, comma separated, in the timezone below. Video 1 uploads at the first time, video 2 at the second, and so on.</span></div>
+    <div class="field"><label for="timezone">Timezone</label>
+      <input id="timezone" type="text" name="timezone" value="{{ client.timezone }}" list="tzs">
+      <datalist id="tzs">{% for t in timezones %}<option value="{{ t }}">{% endfor %}</datalist></div>
+  </div>
+</div>
+
+<div class="panel">
+  <header><h2>Publishing</h2></header>
+  <div class="grid">
+    <div class="field"><label for="privacy">YouTube visibility</label>
+      <select id="privacy" name="privacy">
+        {% for p in ('private','unlisted','public') %}<option value="{{ p }}" {% if client.privacy == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+      </select><span class="hint">Videos uploaded through an API project that has not passed Google's audit are forced to private.</span></div>
+    <div class="field"><label for="category_id">YouTube category ID</label>
+      <input id="category_id" type="text" name="category_id" value="{{ client.category_id }}"><span class="hint">25 is News and Politics.</span></div>
+    <div class="field"><label for="default_tags">Extra tags (comma separated)</label>
+      <input id="default_tags" type="text" name="default_tags" value="{{ client.default_tags }}"><span class="hint">Added to the SEO tags Groq writes for every video.</span></div>
+    <div class="field"><label for="description_footer">Line added to every description</label>
+      <input id="description_footer" type="text" name="description_footer" value="{{ client.description_footer }}" placeholder="Follow us at ...">
+    </div>
+  </div>
+  <div class="check" style="margin-top:.75rem"><input id="auto_publish" type="checkbox" name="auto_publish" {% if client.auto_publish %}checked{% endif %}>
+    <label for="auto_publish">Upload automatically at each video's scheduled time. When off, finished videos wait on their run page for your approval.</label></div>
+  <div class="check" style="margin-top:.5rem"><input id="ai_disclosure" type="checkbox" name="ai_disclosure" {% if client.ai_disclosure %}checked{% endif %}>
+    <label for="ai_disclosure">Mark uploads as AI-generated (YouTube's altered or synthetic content disclosure).</label></div>
+  <div class="actions"><button class="btn" type="submit">{{ 'Create client' if is_new else 'Save settings' }}</button></div>
+</div>
+</form>
+
+{% if not is_new %}
+<div class="panel">
+  <header><h2>Footer and outro</h2><p>The footer is drawn over the video. The outro is added at the end. The thumbnail is generated by Manus alongside the video, no upload needed here.</p></header>
+  <div class="assets">
+    {% for kind in ('footer','outro') %}
+      {% with asset=assets[kind], fallback=defaults[kind], client_id=client.id %}{% include "_asset_card.html" %}{% endwith %}
+    {% endfor %}
+  </div>
+</div>
+
+<div class="panel">
+  <header><h2>YouTube</h2></header>
+  {% if client.yt_status == 'reauth' %}<div class="flash err">Access expired or was revoked. Reconnect below.</div>{% endif %}
+  {% if client.yt_channel_title %}
+    <p>Connected to <strong>{{ client.yt_channel_title }}</strong>.</p>
+    <div class="actions" style="margin-top:.5rem">
+      <a class="btn ghost" href="{{ url_for('yt_connect', client_id=client.id) }}">Reconnect</a>
+      <form class="inline" method="post" action="{{ url_for('yt_disconnect', client_id=client.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn ghost" type="submit">Disconnect</button></form>
+    </div>
+  {% elif yt_ready or client.google_secrets_enc %}
+    <p class="muted">Not connected. You will sign in with the Google account that owns this client's channel.</p>
+    <div class="actions"><a class="btn accent" href="{{ url_for('yt_connect', client_id=client.id) }}">Connect YouTube</a></div>
+  {% else %}
+    <p class="muted">Google sign-in is not set up yet. Add the shared <code>client_secret.json</code> next to <code>app.py</code> (see the README), or give this client its own Google Cloud project below.</p>
+  {% endif %}
+  <details style="margin-top:.9rem"><summary class="small">Use a separate Google Cloud project for this client</summary>
+    <p class="hint" style="margin:.5rem 0">Optional. Gives this client its own YouTube API quota, instead of sharing the app's default project. Upload the OAuth client JSON (type "Web application") from that project.</p>
+    {% if client.google_secrets_enc %}<p class="small"><span class="pill ok">Custom project saved</span></p>{% endif %}
+    <form method="post" action="{{ url_for('yt_secrets', client_id=client.id) }}" enctype="multipart/form-data" class="field" style="max-width:24rem">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="file" name="secrets_file" accept="application/json">
+      <div class="actions"><button class="btn ghost" type="submit">Upload</button>
+        {% if client.google_secrets_enc %}
+        <form class="inline" method="post" action="{{ url_for('yt_secrets_clear', client_id=client.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn ghost" type="submit">Use shared project instead</button></form>
+        {% endif %}
+      </div>
+    </form>
+  </details>
+</div>
+
+<div class="panel scroll">
+  <header><h2>Recent runs</h2></header>
+  {% if runs %}
+  <table><thead><tr><th>Run</th><th>Status</th><th>Step</th><th>Started</th><th></th><th></th></tr></thead><tbody>
+    {% for r in runs %}<tr>
+      <td><a href="{{ url_for('run_detail', run_id=r.id) }}">#{{ r.id }}{% if r.slot %} (video {{ r.slot }}){% endif %}</a></td>
+      <td><span class="pill {{ r.status }}">{{ r.status }}</span></td>
+      <td class="small">{{ r.step }}</td><td class="small">{{ r.started_at|when }}</td>
+      <td class="small">{% if r.youtube_id %}<a href="https://youtu.be/{{ r.youtube_id }}" target="_blank" rel="noopener">Watch</a>{% endif %}</td>
+      <td style="text-align:right">
+        {% if r.status not in ('running', 'publishing') %}
+        <form class="inline" method="post" action="{{ url_for('run_delete', run_id=r.id) }}" onsubmit="return confirm('Delete run #{{ r.id }}?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn danger xs" type="submit">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>{% endfor %}
+  </tbody></table>
+  {% else %}<div class="empty">No runs yet.</div>{% endif %}
+</div>
+
+<div class="panel">
+  <header><h2>Delete client</h2><p>Removes the client, its assets and run history. Videos already on YouTube stay.</p></header>
+  <form method="post" action="{{ url_for('client_delete', client_id=client.id) }}" onsubmit="return confirm('Delete {{ client.name|e }}?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn danger" type="submit">Delete client</button></form>
+</div>
+{% endif %}
+{% endblock %}
